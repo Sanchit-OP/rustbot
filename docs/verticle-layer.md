@@ -245,11 +245,25 @@ The bot follows a **strict vertical layer architecture** with clear separation o
   - Creates and manages RustClient instances
   - Ensures only one connection per server
   - Provides centralized access to Rust clients
+  - **OWNS all connection lifecycle decisions**
+  - Implements auto-reconnect logic
+- **Connection Ownership Rules**:
+  1. **Rust connections are LONG-LIVED and OWNED by RustConnectionManager**
+  2. **Commands (like /status) must NEVER call connect() directly**
+  3. **Only the manager decides when to connect/reconnect/disconnect**
+  4. **Services can REQUEST DATA, not manage connection state**
+- **Connection Strategy**: **HYBRID**
+  - Connect on first Rust command (lazy initialization)
+  - Keep connection alive for subsequent requests
+  - Auto-reconnect on disconnection
+  - This ensures reliability for alarms, chat sync, and real-time features
 - **Key Methods**:
-  - `connect()` - Connects to configured Rust server
-  - `disconnect()` - Disconnects from server
+  - `ensureConnected()` - **PUBLIC**: Ensures connection is ready (called by services)
+  - `connect()` - **PRIVATE**: Connects to configured Rust server (internal only)
+  - `disconnect()` - Disconnects from server and disables auto-reconnect
   - `getClient()` - Returns active RustClient instance
   - `getStatus()` - Returns connection status
+  - `handleReconnect()` - Handles automatic reconnection with retry logic
 
 ---
 

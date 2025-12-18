@@ -4,6 +4,9 @@ const logger = require('../../core/logger');
 /**
  * Service for checking Rust server status
  * This is the business logic layer that coordinates between Discord and Rust
+ * 
+ * IMPORTANT: This service REQUESTS DATA, it does NOT manage connections
+ * Connection management is the sole responsibility of RustConnectionManager
  */
 class StatusService {
   /**
@@ -14,14 +17,12 @@ class StatusService {
     try {
       logger.info('Checking Rust server status...');
 
+      // Ensure connection is established (manager handles this)
+      await rustConnectionManager.ensureConnected();
+
+      // Get the client to make API calls
       const client = rustConnectionManager.getClient();
       const connectionStatus = client.getConnectionStatus();
-
-      // If not connected, try to connect
-      if (!connectionStatus.isConnected && !connectionStatus.isConnecting) {
-        logger.info('Not connected to Rust server, attempting to connect...');
-        await rustConnectionManager.connect();
-      }
 
       // Get server info
       const info = await client.getInfo();
