@@ -19,10 +19,26 @@ class GuildConfigStore {
   }
 
   /**
+   * Get status channel id for a guild
+   */
+  getStatusChannelId(guildId) {
+    return this.getConfig(guildId).statusChannelId;
+  }
+
+  /**
    * Set configuration for a guild
    */
   setConfig(guildId, config) {
-    this.configs.set(guildId, { ...this.getDefaultConfig(), ...config });
+    const currentConfig = this.getConfig(guildId);
+    this.configs.set(guildId, { ...currentConfig, ...config });
+  }
+
+  /**
+   * Set status channel id for a guild
+   */
+  setStatusChannelId(guildId, statusChannelId) {
+    const currentConfig = this.getConfig(guildId);
+    this.setConfig(guildId, { ...currentConfig, statusChannelId });
   }
 
   /**
@@ -33,6 +49,7 @@ class GuildConfigStore {
       prefix: '!',
       rustServerEnabled: true,
       notificationChannel: null,
+      statusChannelId: null,
     };
   }
 

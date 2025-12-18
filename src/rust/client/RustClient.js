@@ -153,6 +153,28 @@ class RustClient {
   }
 
   /**
+   * Get team information
+   */
+  async getTeamInfo() {
+    if (!this.isConnected || !this.client) {
+      throw new Error('Not connected to Rust server');
+    }
+
+    try {
+      const response = await this.client.sendRequestAsync(
+        {
+          getTeamInfo: {},
+        },
+        10000
+      );
+      return response.teamInfo;
+    } catch (error) {
+      logger.error('Failed to get team info', { error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * Disconnect from the Rust server
    */
   disconnect() {

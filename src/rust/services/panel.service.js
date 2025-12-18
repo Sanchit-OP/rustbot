@@ -1,0 +1,56 @@
+const rustConnectionManager = require('../client/RustConnectionManager');
+const logger = require('../../core/logger');
+
+/**
+ * Aggregates data required for the live status panel.
+ * Returns raw data with no Discord formatting.
+ */
+class PanelService {
+  /**
+   * Fetch server and team data for the live panel.
+   * @returns {Promise<{server: object, team: object, updatedAt: string}>}
+   */
+  async getPanelData() {
+    try {
+      logger.info('Fetching panel data...');
+
+      // Ensure connection is established
+      await rustConnectionManager.ensureConnected();
+
+      const client = rustConnectionManager.getClient();
+
+      const [info, time, teamInfo] = await Promise.all([
+        client.getInfo(),
+        client.getTime(),
+        client.getTeamInfo(),
+      ]);
+
+      const server = {
+        name: info?.name || 'Unknown Server',
+        players: info?.players ?? null,
+        maxPlayers: info?.maxPlayers ?? null,
+        map: info?.map || null,
+        mapSize: info?.size ?? null,
+        wipe: info?.wipe ?? null,
+        time: time || null,
+        address: {
+          ip: client.serverIp,
+          port: client.serverPort,
+        },
+      };
+
+      const team = teamInfo || null;
+
+      return {
+        server,
+        team,
+        updatedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      logger.error('Failed to fetch panel data', { error: error.message });
+      throw error;
+    }
+  }
+}
+
+module.exports = new PanelService();

@@ -58,7 +58,6 @@ async function shutdown() {
       await client.destroy();
     }
 
-    logger.success('Bot shut down successfully');
     process.exit(0);
   } catch (error) {
     logger.error('Error during shutdown', { error: error.message });

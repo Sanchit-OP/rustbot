@@ -1,6 +1,7 @@
 const { ChannelType } = require('discord.js');
 const logger = require('../../core/logger');
 const discordConfig = require('../../config/discord');
+const guildConfigStore = require('../../storage/guildConfig.store');
 
 /**
  * Discord ready event
@@ -20,10 +21,51 @@ module.exports = {
       status: 'online',
     });
 
+    // Ensure status channel exists in all guilds
+    await createStatusChannels(client);
+
     // Create test-commands-bot channel in all guilds
     await createTestChannels(client);
   },
 };
+
+/**
+ * Ensure rust-status channel exists in all guilds
+ */
+async function createStatusChannels(client) {
+  const channelName = discordConfig.STATUS_CHANNEL_NAME;
+
+  for (const [, guild] of client.guilds.cache) {
+    try {
+      const existingChannel = guild.channels.cache.find(
+        channel => channel.name === channelName && channel.type === ChannelType.GuildText
+      );
+
+      let statusChannel = existingChannel;
+
+      if (statusChannel) {
+        logger.info(`Reusing status channel "${channelName}" in guild: ${guild.name}`);
+      } else {
+        statusChannel = await guild.channels.create({
+          name: channelName,
+          type: ChannelType.GuildText,
+          topic: 'Rust status dashboard',
+        });
+
+        logger.success(`Created status channel "${channelName}" in guild: ${guild.name}`);
+      }
+
+      guildConfigStore.setStatusChannelId(guild.id, statusChannel.id);
+      logger.info(
+        `Stored status channel for guild: ${guild.name} (${guild.id}) -> ${statusChannel.id}`
+      );
+    } catch (error) {
+      logger.error(`Failed to create status channel in guild: ${guild.name}`, {
+        error: error.message,
+      });
+    }
+  }
+}
 
 /**
  * Create test-commands-bot channel in all guilds if it doesn't exist

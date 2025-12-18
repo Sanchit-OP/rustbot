@@ -1,5 +1,7 @@
 const logger = require('../../core/logger');
 const discordClient = require('../client');
+const guildConfigStore = require('../../storage/guildConfig.store');
+const statusChannelGuard = require('../guards/statusChannel.guard');
 
 /**
  * Discord interactionCreate event
@@ -21,6 +23,15 @@ module.exports = {
     }
 
     try {
+      const guildConfig = interaction.guildId
+        ? guildConfigStore.getConfig(interaction.guildId)
+        : null;
+
+      const allowed = await statusChannelGuard(interaction, guildConfig);
+      if (!allowed) {
+        return;
+      }
+
       logger.info(`Executing command: ${interaction.commandName}`, {
         user: interaction.user.tag,
         guild: interaction.guild?.name || 'DM',
