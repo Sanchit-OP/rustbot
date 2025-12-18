@@ -2,6 +2,8 @@ const { ChannelType } = require('discord.js');
 const logger = require('../../core/logger');
 const discordConfig = require('../../config/discord');
 const guildConfigStore = require('../../storage/guildConfig.store');
+const panelManager = require('../panel/PanelManager');
+const panelService = require('../../rust/services/panel.service');
 
 /**
  * Discord ready event
@@ -26,6 +28,9 @@ module.exports = {
 
     // Create test-commands-bot channel in all guilds
     await createTestChannels(client);
+
+    // Resume panel auto-updates where enabled
+    await resumePanels(client);
   },
 };
 
@@ -63,6 +68,32 @@ async function createStatusChannels(client) {
       logger.error(`Failed to create status channel in guild: ${guild.name}`, {
         error: error.message,
       });
+    }
+  }
+}
+
+async function resumePanels(client) {
+  for (const [, guild] of client.guilds.cache) {
+    try {
+      // Ensure status channel exists and message is reachable (will recreate if missing)
+      const channel = await panelManager.ensureStatusChannel(guild);
+      const message = await panelManager.ensurePanelMessage(guild, channel);
+
+      panelManager.startAutoUpdate(
+        guild,
+        async () => {
+          const data = await panelService.getPanelData();
+          await panelManager.updatePanel(guild, data);
+        },
+        discordConfig.DEFAULT_PANEL_INTERVAL_SECONDS
+      );
+
+      guildConfigStore.setStatusPanelMessageId(guild.id, message.id);
+      guildConfigStore.setPanelEnabled(guild.id, true);
+
+      logger.info(`Resumed/started panel updates for guild: ${guild.name}`);
+    } catch (error) {
+      logger.error(`Failed to resume panel for guild: ${guild.name}`, { error: error.message });
     }
   }
 }

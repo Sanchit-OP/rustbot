@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const statusService = require('../../rust/services/status.service');
 const logger = require('../../core/logger');
 
@@ -68,7 +68,7 @@ module.exports = {
       if (interaction.deferred) {
         await interaction.editReply({ embeds: [errorEmbed] });
       } else {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
       }
     }
   },

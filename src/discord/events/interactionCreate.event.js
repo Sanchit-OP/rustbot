@@ -1,3 +1,4 @@
+const { MessageFlags } = require('discord.js');
 const logger = require('../../core/logger');
 const discordClient = require('../client');
 const guildConfigStore = require('../../storage/guildConfig.store');
@@ -46,7 +47,7 @@ module.exports = {
 
       const errorMessage = {
         content: 'There was an error executing this command!',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       };
 
       if (interaction.replied || interaction.deferred) {

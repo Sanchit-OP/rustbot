@@ -1,4 +1,6 @@
-const STATUS_ONLY_COMMANDS = new Set(['panel', 'server', 'team']);
+const { MessageFlags } = require('discord.js');
+
+const STATUS_ONLY_COMMANDS = new Set(['panel']);
 
 /**
  * Soft guard to restrict status-only commands to the configured status channel.
@@ -19,10 +21,12 @@ async function statusChannelGuard(interaction, guildConfig) {
   const statusChannelMention = statusChannelId ? `<#${statusChannelId}>` : 'the Rust status channel';
   const message = `Please use this command in ${statusChannelMention}.`;
 
+  const payload = { content: message, flags: MessageFlags.Ephemeral };
+
   if (interaction.replied || interaction.deferred) {
-    await interaction.followUp({ content: message, ephemeral: true });
+    await interaction.followUp(payload);
   } else {
-    await interaction.reply({ content: message, ephemeral: true });
+    await interaction.reply(payload);
   }
 
   return false;

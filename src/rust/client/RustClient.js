@@ -169,8 +169,9 @@ class RustClient {
       );
       return response.teamInfo;
     } catch (error) {
-      logger.error('Failed to get team info', { error: error.message });
-      throw error;
+      // Some servers may not have team info; return null instead of crashing.
+      logger.warn('Failed to get team info; returning null', { error: error.message });
+      return null;
     }
   }
 
