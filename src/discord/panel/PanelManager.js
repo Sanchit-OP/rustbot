@@ -181,7 +181,10 @@ class PanelManager {
     lines.push('');
     lines.push(...this.buildTeamSection(team));
     lines.push('');
-    lines.push(`Last Updated: ${updatedAt || new Date().toISOString()}`);
+    const updatedSeconds = Math.floor(
+      updatedAt ? new Date(updatedAt).getTime() / 1000 : Date.now() / 1000
+    );
+    lines.push(`Last Updated: <t:${updatedSeconds}:R>`);
 
     return lines.join('\n');
   }
@@ -260,7 +263,7 @@ class PanelManager {
     const total = members.length;
 
     const lines = [];
-    lines.push(`Team (${onlineCount}/${total} online)`);
+    lines.push(`👥 Team Status — ${onlineCount} / ${total} Online`);
 
     const maxRows = 12;
     members.slice(0, maxRows).forEach(member => {
