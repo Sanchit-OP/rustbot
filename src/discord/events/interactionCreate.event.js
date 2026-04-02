@@ -1,5 +1,6 @@
 const { MessageFlags } = require('discord.js');
 const logger = require('../../core/logger');
+const botMessage = require('../../core/botMessage');
 const discordClient = require('../client');
 const guildConfigStore = require('../../storage/guildConfig.store');
 const statusChannelGuard = require('../guards/statusChannel.guard');
@@ -47,7 +48,7 @@ module.exports = {
       });
 
       const errorMessage = {
-        content: 'There was an error executing this command!',
+        content: botMessage.prefix('There was an error executing this command!'),
         flags: MessageFlags.Ephemeral,
       };
 

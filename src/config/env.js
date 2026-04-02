@@ -34,8 +34,9 @@ const env = {
     serverPort: parseInt(process.env.RUST_SERVER_PORT, 10),
     playerId: process.env.RUST_PLAYER_ID,
     playerToken: parseInt(process.env.RUST_PLAYER_TOKEN, 10),
-    chatCommandPrefix: process.env.RUST_CHAT_COMMAND_PREFIX || '!rb',
+    chatCommandPrefix: process.env.RUST_CHAT_COMMAND_PREFIX || '!',
     chatAllowedSteamIds: parseCsv(process.env.RUST_CHAT_ALLOWED_STEAM_IDS),
+    mapMarkersPollSeconds: parseInt(process.env.RUST_MAP_MARKERS_POLL_SECONDS || '12', 10),
   },
 
   // Validation

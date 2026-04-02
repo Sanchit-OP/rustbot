@@ -12,7 +12,12 @@ const rustConnectionManager = require('./rust/client/RustConnectionManager');
 // Load event handlers
 require('./rust/events/connection.event');
 require('./rust/events/world.event');
+require('./rust/events/teamChatBootstrap.event');
+require('./rust/events/mapMarkersPoller.event');
+require('./rust/events/teamEventAnnouncer.event');
 require('./rust/interpreters/serverEvents.interpreter');
+require('./rust/interpreters/teamChat.interpreter');
+require('./rust/events/teamChatCommand.event');
 require('./discord/events/serverEvents.handler');
 
 /**
@@ -34,6 +39,19 @@ async function initialize() {
 
     // Initialize Discord client (this will also login)
     await discordClient.initialize();
+
+    // Real-time features (events + in-game chat commands) need an active Rust connection.
+    // Attempt now; if it fails, reconnect loop will continue in background.
+    rustConnectionManager.ensureConnected().catch((error) => {
+      logger.warn('Initial Rust connection attempt failed; reconnect loop will continue', {
+        error: error?.error || error?.message || String(error),
+      });
+      rustConnectionManager.handleReconnect().catch((reconnectError) => {
+        logger.error('Failed to start reconnect loop', {
+          error: reconnectError?.error || reconnectError?.message || String(reconnectError),
+        });
+      });
+    });
 
     logger.success('Bot initialization complete!');
   } catch (error) {

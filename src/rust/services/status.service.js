@@ -34,7 +34,7 @@ class StatusService {
         serverName: info.name || 'Unknown Server',
         players: `${info.players}/${info.maxPlayers}`,
         map: info.map || 'Unknown',
-        mapSize: info.size || 'Unknown',
+        mapSize: info.mapSize || info.size || 'Unknown',
         wipeTime: info.wipe ? new Date(info.wipe * 1000).toLocaleString() : 'Unknown',
         gameTime: this.formatGameTime(time),
         serverIp: connectionStatus.serverIp,

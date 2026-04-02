@@ -22,6 +22,12 @@ eventBus.subscribe('rust:connection_failed', (data) => {
     port: data.port,
     error: data.error,
   });
+
+  // Initial connect failures should also enter the reconnect loop.
+  logger.info('Initiating auto-reconnect after connection failure...');
+  rustConnectionManager.handleReconnect().catch((error) => {
+    logger.error('Auto-reconnect failed after connection failure', { error: error.message });
+  });
 });
 
 // Handle disconnection - trigger auto-reconnect

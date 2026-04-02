@@ -1,4 +1,5 @@
 const { MessageFlags } = require('discord.js');
+const botMessage = require('../../core/botMessage');
 const { safeFollowUp, safeReply } = require('../utils/interactionResponse');
 
 const STATUS_ONLY_COMMANDS = new Set(['panel']);
@@ -20,7 +21,7 @@ async function statusChannelGuard(interaction, guildConfig) {
   }
 
   const statusChannelMention = statusChannelId ? `<#${statusChannelId}>` : 'the Rust status channel';
-  const message = `Please use this command in ${statusChannelMention}.`;
+  const message = botMessage.prefix(`Please use this command in ${statusChannelMention}.`);
 
   const payload = { content: message, flags: MessageFlags.Ephemeral };
 

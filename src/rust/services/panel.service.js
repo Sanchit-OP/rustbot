@@ -35,7 +35,7 @@ class PanelService {
         players: info?.players ?? null,
         maxPlayers: info?.maxPlayers ?? null,
         map: info?.map || null,
-        mapSize: info?.size ?? null,
+        mapSize: info?.mapSize ?? info?.size ?? null,
         wipe: info?.wipe ?? null,
         time: time || null,
         address: {

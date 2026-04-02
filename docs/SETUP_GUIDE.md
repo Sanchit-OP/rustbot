@@ -104,6 +104,13 @@ RUST_SERVER_IP=123.456.789.0
 RUST_SERVER_PORT=28082
 RUST_PLAYER_ID=your_steam_id_64
 RUST_PLAYER_TOKEN=obtained_from_pairing
+
+# Optional Rust in-game team chat commands
+RUST_CHAT_COMMAND_PREFIX=!
+# Optional allowlist (comma separated steam IDs). Leave empty to allow all team members.
+# RUST_CHAT_ALLOWED_STEAM_IDS=7656119...,7656119...
+# Optional map marker poll interval for world events (seconds, min 5)
+# RUST_MAP_MARKERS_POLL_SECONDS=12
 ```
 
 ---

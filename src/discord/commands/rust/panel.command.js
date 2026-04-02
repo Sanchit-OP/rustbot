@@ -3,6 +3,7 @@ const panelService = require('../../../rust/services/panel.service');
 const panelManager = require('../../panel/PanelManager');
 const guildConfigStore = require('../../../storage/guildConfig.store');
 const logger = require('../../../core/logger');
+const botMessage = require('../../../core/botMessage');
 const { DEFAULT_PANEL_INTERVAL_SECONDS } = require('../../../config/discord');
 const {
   safeDeferReply,
@@ -27,7 +28,7 @@ module.exports = {
   async execute(interaction) {
     if (!interaction.guild) {
       await safeReply(interaction, {
-        content: 'This command can only be used in a server.',
+        content: botMessage.prefix('This command can only be used in a server.'),
         flags: MessageFlags.Ephemeral,
       }, 'panel.command.guildOnly');
       return;
@@ -50,7 +51,7 @@ module.exports = {
     } catch (error) {
       logger.error('Failed to update panel', { error: error.message });
       await safeEditReply(interaction, {
-        content: `Failed to update panel: ${error.message}`,
+        content: botMessage.prefix(`Failed to update panel: ${error.message}`),
       }, 'panel.command.catch');
     }
   },
@@ -78,7 +79,9 @@ async function handleStart(interaction) {
   const channelMention = getStatusChannelMention(interaction.guild.id);
 
   await safeEditReply(interaction, {
-    content: `Panel updates started. Live panel in ${channelMention} (every ${DEFAULT_PANEL_INTERVAL_SECONDS}s).`,
+    content: botMessage.prefix(
+      `Panel updates started. Live panel in ${channelMention} (every ${DEFAULT_PANEL_INTERVAL_SECONDS}s).`
+    ),
   }, 'panel.start.reply');
 }
 
@@ -91,7 +94,7 @@ async function handleRefresh(interaction) {
   const channelMention = getStatusChannelMention(interaction.guild.id);
 
   await safeEditReply(interaction, {
-    content: `Panel refreshed in ${channelMention}.`,
+    content: botMessage.prefix(`Panel refreshed in ${channelMention}.`),
   }, 'panel.refresh.reply');
 }
 
@@ -107,6 +110,6 @@ async function handleStop(interaction) {
   guildConfigStore.setPanelEnabled(interaction.guild.id, false);
 
   await safeEditReply(interaction, {
-    content: 'Panel updates stopped. The panel message remains pinned.',
+    content: botMessage.prefix('Panel updates stopped. The panel message remains pinned.'),
   }, 'panel.stop.reply');
 }

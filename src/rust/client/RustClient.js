@@ -1,6 +1,7 @@
 const RustPlus = require('@liamcottle/rustplus.js');
 const logger = require('../../core/logger');
 const eventBus = require('../../core/eventBus');
+const botMessage = require('../../core/botMessage');
 
 /**
  * Wrapper around RustPlus client
@@ -265,6 +266,51 @@ class RustClient {
   }
 
   /**
+   * Fetch recent team chat messages.
+   * Calling this once on connect helps ensure chat broadcasts start flowing.
+   */
+  async getTeamChat() {
+    if (!this.isConnected || !this.client) {
+      throw new Error('Not connected to Rust server');
+    }
+
+    try {
+      const response = await this.client.sendRequestAsync(
+        {
+          getTeamChat: {},
+        },
+        10000
+      );
+      return response.teamChat || null;
+    } catch (error) {
+      logger.warn('Failed to get team chat', { error: getErrorMessage(error) });
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch current map markers.
+   */
+  async getMapMarkers() {
+    if (!this.isConnected || !this.client) {
+      throw new Error('Not connected to Rust server');
+    }
+
+    try {
+      const response = await this.client.sendRequestAsync(
+        {
+          getMapMarkers: {},
+        },
+        10000
+      );
+      return response?.mapMarkers?.markers || [];
+    } catch (error) {
+      logger.warn('Failed to get map markers', { error: getErrorMessage(error) });
+      throw error;
+    }
+  }
+
+  /**
    * Send a message to Rust team chat.
    */
   async sendTeamMessage(message) {
@@ -272,16 +318,18 @@ class RustClient {
       throw new Error('Not connected to Rust server');
     }
 
-    const text = String(message || '').trim();
+    const payload = normalizeTeamMessagePayload(message);
+    const text = payload.text;
     if (!text) {
       return;
     }
+    const decorated = botMessage.prefixRust(text, payload.tone);
 
     try {
       await this.client.sendRequestAsync(
         {
           sendTeamMessage: {
-            message: text.slice(0, 200),
+            message: decorated.slice(0, 200),
           },
         },
         10000
@@ -354,4 +402,18 @@ function getErrorMessage(error) {
   } catch (jsonError) {
     return String(error);
   }
+}
+
+function normalizeTeamMessagePayload(message) {
+  if (message && typeof message === 'object' && !Array.isArray(message)) {
+    return {
+      text: String(message.text || '').trim(),
+      tone: message.tone || 'default',
+    };
+  }
+
+  return {
+    text: String(message || '').trim(),
+    tone: 'default',
+  };
 }

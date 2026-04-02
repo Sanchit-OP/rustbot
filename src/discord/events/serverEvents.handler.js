@@ -1,8 +1,18 @@
 const eventBus = require('../../core/eventBus');
 const logger = require('../../core/logger');
+const botMessage = require('../../core/botMessage');
 const guildConfigStore = require('../../storage/guildConfig.store');
 const discordClient = require('../client');
 const discordConfig = require('../../config/discord');
+
+const ICON = {
+  CHINOOK: '\u{1F681}',
+  CARGO: '\u{1F6A2}',
+  HELI_IN: '\u{1F681}',
+  HELI_DOWN: '\u{1F4A5}',
+  OIL: '\u{1F3D7}\u{FE0F}',
+  CLOCK: '\u{1F558}',
+};
 
 /**
  * Listens for semantic server events and posts them to the server-events channel.
@@ -31,6 +41,12 @@ eventBus.subscribe('server:event', async (event) => {
     if (!content) return;
 
     await channel.send({ content });
+    eventBus.emitEvent('discord:server_event_sent', {
+      guildId: guild.id,
+      channelId: channel.id,
+      type: event.type,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     logger.error('Failed to handle server event', { error: error.message, event });
   }
@@ -76,31 +92,46 @@ async function ensureServerEventsChannel(guild) {
 
 function formatServerEvent(event) {
   const ts = event.timestamp ? `<t:${Math.floor(new Date(event.timestamp).getTime() / 1000)}:R>` : '';
+
   switch (event.type) {
     case 'CHINOOK_DROP':
-      return `🚁 Chinook Drop — Grid ${event.grid || 'Unknown'} — 🕘 ${ts}`;
+      return botMessage.prefix(
+        `${ICON.CHINOOK} Chinook Drop - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
+      );
     case 'CARGO':
       if (event.state === 'ENTERING') {
-        return `🚢 Cargo Incoming — From ${event.side || 'UNKNOWN'} — Grid ${event.grid || 'Unknown'} — 🕘 ${ts}`;
+        return botMessage.prefix(
+          `${ICON.CARGO} Cargo Incoming - From ${event.side || 'UNKNOWN'} - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
+        );
       }
       if (event.state === 'LEAVING') {
-        return `🚢 Cargo Leaving — Toward ${event.side || 'UNKNOWN'} — Grid ${event.grid || 'Unknown'} — 🕘 ${ts}`;
+        return botMessage.prefix(
+          `${ICON.CARGO} Cargo Leaving - Toward ${event.side || 'UNKNOWN'} - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
+        );
       }
       return null;
     case 'PATROL_HELI':
       if (event.state === 'IN') {
-        return `🚁 Patrol Heli IN — Grid ${event.grid || 'Unknown'} — 🕘 ${ts}`;
+        return botMessage.prefix(
+          `${ICON.HELI_IN} Patrol Heli IN - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
+        );
       }
       if (event.state === 'DOWN') {
-        return `💥 Patrol Heli DOWN — Grid ${event.grid || 'Unknown'} — 🕘 ${ts}`;
+        return botMessage.prefix(
+          `${ICON.HELI_DOWN} Patrol Heli DOWN - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
+        );
       }
       return null;
     case 'OIL_RIG':
       if (event.size === 'LARGE') {
-        return `🏭 Large Oil Rig Called — Grid ${event.grid || 'Unknown'} — 🕘 ${ts}`;
+        return botMessage.prefix(
+          `${ICON.OIL} Large Oil Rig Called - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
+        );
       }
       if (event.size === 'SMALL') {
-        return `🏭 Small Oil Rig Called — Grid ${event.grid || 'Unknown'} — 🕘 ${ts}`;
+        return botMessage.prefix(
+          `${ICON.OIL} Small Oil Rig Called - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
+        );
       }
       return null;
     default:
