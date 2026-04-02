@@ -1,6 +1,7 @@
 const { GatewayIntentBits, Partials } = require('discord.js');
 
 const STATUS_CHANNEL_NAME = 'rust-status';
+const SERVER_EVENTS_CHANNEL_NAME = 'server-events';
 const DEFAULT_PANEL_INTERVAL_SECONDS = 60;
 
 /**
@@ -20,6 +21,7 @@ const discordConfig = {
   // Channel configuration
   channels: {
     status: STATUS_CHANNEL_NAME,
+    serverEvents: SERVER_EVENTS_CHANNEL_NAME,
     testCommandsBot: 'test-commands-bot',
   },
 
@@ -32,5 +34,6 @@ const discordConfig = {
 module.exports = {
   ...discordConfig,
   STATUS_CHANNEL_NAME,
+  SERVER_EVENTS_CHANNEL_NAME,
   DEFAULT_PANEL_INTERVAL_SECONDS,
 };

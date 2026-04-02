@@ -29,6 +29,13 @@ class GuildConfigStore {
   }
 
   /**
+   * Get server events channel id for a guild
+   */
+  getServerEventsChannelId(guildId) {
+    return this.getConfig(guildId).serverEventsChannelId;
+  }
+
+  /**
    * Get status panel message id for a guild
    */
   getStatusPanelMessageId(guildId) {
@@ -60,6 +67,14 @@ class GuildConfigStore {
   }
 
   /**
+   * Set server events channel id for a guild
+   */
+  setServerEventsChannelId(guildId, serverEventsChannelId) {
+    const currentConfig = this.getConfig(guildId);
+    this.setConfig(guildId, { ...currentConfig, serverEventsChannelId });
+  }
+
+  /**
    * Set status panel message id for a guild
    */
   setStatusPanelMessageId(guildId, statusPanelMessageId) {
@@ -86,6 +101,7 @@ class GuildConfigStore {
       statusChannelId: null,
       statusPanelMessageId: null,
       panelEnabled: false,
+      serverEventsChannelId: null,
     };
   }
 

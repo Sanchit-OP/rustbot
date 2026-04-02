@@ -2,6 +2,7 @@ const { ChannelType } = require('discord.js');
 const logger = require('../../core/logger');
 const discordConfig = require('../../config/discord');
 const guildConfigStore = require('../../storage/guildConfig.store');
+const { posToGrid, DEFAULT_MAP_SIZE } = require('../../core/utils/grid');
 
 /**
  * Manages the live panel message per guild.
@@ -26,7 +27,6 @@ class PanelManager {
       }
     }
 
-    // Try to find by name if stored id is missing or stale
     const existingByName = guild.channels.cache.find(
       channel => channel.name === desiredName && channel.type === ChannelType.GuildText
     );
@@ -61,7 +61,6 @@ class PanelManager {
     if (storedMessageId) {
       const message = await this.fetchMessageSafe(channel, storedMessageId);
       if (message) {
-        // Ensure it's pinned
         if (!message.pinned) {
           await message.pin().catch(() => {});
         }
@@ -69,7 +68,6 @@ class PanelManager {
       }
     }
 
-    // Try to reuse an existing pinned panel message from this bot
     if (botUserId) {
       try {
         const pinned = await channel.messages.fetchPins();
@@ -89,7 +87,6 @@ class PanelManager {
         }
 
         if (candidates.length > 0) {
-          // Fallback: reuse the first pinned message even if not authored by this bot
           const reuse = candidates[0];
           guildConfigStore.setStatusPanelMessageId(guild.id, reuse.id);
           if (!reuse.pinned) {
@@ -105,7 +102,6 @@ class PanelManager {
         });
       }
 
-      // If no pinned matches, scan recent messages from this bot
       try {
         const recent = await channel.messages.fetch({ limit: 50 });
         const botMessages = recent.filter(msg => msg.author?.id === botUserId);
@@ -128,7 +124,6 @@ class PanelManager {
       }
     }
 
-    // Create a fresh panel message
     const newMessage = await channel.send('Initializing Rust status panel...');
     await newMessage.pin().catch(() => {});
 
@@ -162,7 +157,6 @@ class PanelManager {
       guildConfigStore.setStatusPanelMessageId(guild.id, message.id);
     }
 
-    // Ensure pinned (if unpinned manually)
     if (!message.pinned) {
       await message.pin().catch(() => {});
     }
@@ -175,11 +169,11 @@ class PanelManager {
     const { server, team, updatedAt } = panelData;
     const lines = [];
 
-    lines.push('╔═ Rust Status ═════════════════');
+    lines.push('╔═ Rust Status ═════════════════╗');
     lines.push(...this.buildServerSection(server));
-    lines.push('╚═════════════════════════');
+    lines.push('╚══════════════════════════════╝');
     lines.push('');
-    lines.push(...this.buildTeamSection(team));
+    lines.push(...this.buildTeamSection(team, server));
     lines.push('');
     const updatedSeconds = Math.floor(
       updatedAt ? new Date(updatedAt).getTime() / 1000 : Date.now() / 1000
@@ -189,9 +183,6 @@ class PanelManager {
     return lines.join('\n');
   }
 
-  /**
-   * Fetch a message by id without throwing if missing.
-   */
   async fetchMessageSafe(channel, messageId) {
     try {
       return await channel.messages.fetch(messageId);
@@ -205,12 +196,6 @@ class PanelManager {
     }
   }
 
-  /**
-   * Start periodic updates for a guild. Prevents duplicate intervals.
-   * @param {Guild} guild
-   * @param {Function} updateFn async function to fetch data and call updatePanel
-   * @param {number} intervalSeconds
-   */
   startAutoUpdate(guild, updateFn, intervalSeconds) {
     if (this.intervals.has(guild.id)) {
       logger.info(`Panel auto-update already running for guild: ${guild.name}`);
@@ -234,9 +219,6 @@ class PanelManager {
     logger.info(`Started panel auto-update for guild: ${guild.name} (${intervalSeconds}s)`);
   }
 
-  /**
-   * Stop periodic updates for a guild.
-   */
   stopAutoUpdate(guildId) {
     const handle = this.intervals.get(guildId);
     if (handle) {
@@ -246,14 +228,11 @@ class PanelManager {
     }
   }
 
-  /**
-   * Get status channel id for a guild from store
-   */
   getStatusChannelId(guildId) {
     return guildConfigStore.getStatusChannelId(guildId);
   }
 
-  buildTeamSection(team) {
+  buildTeamSection(team, server) {
     if (!team || !Array.isArray(team.members)) {
       return ['Team: unavailable'];
     }
@@ -261,6 +240,7 @@ class PanelManager {
     const members = team.members || [];
     const onlineCount = members.filter(m => m.isOnline).length;
     const total = members.length;
+    const mapSize = server?.mapSize || DEFAULT_MAP_SIZE;
 
     const lines = [];
     lines.push(`👥 Team Status — ${onlineCount} / ${total} Online`);
@@ -269,7 +249,7 @@ class PanelManager {
     members.slice(0, maxRows).forEach(member => {
       const dot = this.getStatusDot(member);
       const name = member.name || member.steamId || 'Unknown';
-      const info = this.getMemberInfo(member);
+      const info = this.getMemberInfo(member, mapSize);
       lines.push(info ? `${dot} ${name} — ${info}` : `${dot} ${name}`);
     });
 
@@ -314,13 +294,24 @@ class PanelManager {
     return '⚪';
   }
 
-  getMemberInfo(member) {
-    // Prefer time-based info when available
+  getMemberInfo(member, mapSize) {
+    const parts = [];
+    const grid = this.getGridForMember(member, mapSize);
+    if (grid) parts.push(`Grid ${grid}`);
+
     if (member.deathTime) {
-      return `died ${this.formatRelativeUnix(member.deathTime)}`;
+      parts.push(`died ${this.formatRelativeUnix(member.deathTime)}`);
+    } else if (member.spawnTime && !member.isOnline) {
+      parts.push(`last seen ${this.formatRelativeUnix(member.spawnTime)}`);
     }
-    if (member.spawnTime && !member.isOnline) {
-      return `last seen ${this.formatRelativeUnix(member.spawnTime)}`;
+
+    if (parts.length === 0) return null;
+    return parts.join(' • ');
+  }
+
+  getGridForMember(member, mapSize) {
+    if (Number.isFinite(member?.x) && Number.isFinite(member?.y)) {
+      return posToGrid(member.x, member.y, mapSize);
     }
     return null;
   }

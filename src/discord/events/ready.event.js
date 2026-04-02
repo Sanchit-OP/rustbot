@@ -26,6 +26,9 @@ module.exports = {
     // Ensure status channel exists in all guilds
     await createStatusChannels(client);
 
+    // Ensure server-events channel exists in all guilds
+    await createServerEventsChannels(client);
+
     // Create test-commands-bot channel in all guilds
     await createTestChannels(client);
 
@@ -94,6 +97,40 @@ async function resumePanels(client) {
       logger.info(`Resumed/started panel updates for guild: ${guild.name}`);
     } catch (error) {
       logger.error(`Failed to resume panel for guild: ${guild.name}`, { error: error.message });
+    }
+  }
+}
+
+/**
+ * Ensure server-events channel exists in all guilds
+ */
+async function createServerEventsChannels(client) {
+  const channelName = discordConfig.SERVER_EVENTS_CHANNEL_NAME;
+
+  for (const [, guild] of client.guilds.cache) {
+    try {
+      const existingChannel = guild.channels.cache.find(
+        channel => channel.name === channelName && channel.type === ChannelType.GuildText
+      );
+
+      if (existingChannel) {
+        logger.info(`Reusing server events channel "${channelName}" in guild: ${guild.name}`);
+        guildConfigStore.setServerEventsChannelId(guild.id, existingChannel.id);
+        continue;
+      }
+
+      const newChannel = await guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        topic: 'Rust world event notifications',
+      });
+
+      logger.success(`Created server events channel "${channelName}" in guild: ${guild.name}`);
+      guildConfigStore.setServerEventsChannelId(guild.id, newChannel.id);
+    } catch (error) {
+      logger.error(`Failed to create server events channel in guild: ${guild.name}`, {
+        error: error.message,
+      });
     }
   }
 }

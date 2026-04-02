@@ -11,6 +11,9 @@ const rustConnectionManager = require('./rust/client/RustConnectionManager');
 
 // Load event handlers
 require('./rust/events/connection.event');
+require('./rust/events/world.event');
+require('./rust/interpreters/serverEvents.interpreter');
+require('./discord/events/serverEvents.handler');
 
 /**
  * Initialize the application

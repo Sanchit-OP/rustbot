@@ -6,9 +6,6 @@ const logger = require('../../core/logger');
  * Returns raw data with no Discord formatting.
  */
 class PanelService {
-  constructor() {
-    this.hasLoggedTeamShape = false;
-  }
   /**
    * Fetch server and team data for the live panel.
    * @returns {Promise<{server: object, team: object, updatedAt: string}>}
@@ -28,10 +25,6 @@ class PanelService {
       let teamInfo = null;
       try {
         teamInfo = await client.getTeamInfo();
-        if (!this.hasLoggedTeamShape) {
-          logger.info('Team data sample', { teamInfo });
-          this.hasLoggedTeamShape = true;
-        }
       } catch (teamError) {
         logger.warn('Team info unavailable; continuing without it', { error: teamError.message });
         teamInfo = null;

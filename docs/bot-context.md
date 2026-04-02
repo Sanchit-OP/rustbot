@@ -1,182 +1,230 @@
 Project Context
 
-This project is a 24/7 Discord bot integrated with the Rust+ (Rust Companion App) API, built using Node.js and discord.js v14.
+We have a Node.js Discord bot (discord.js v14) integrated with Rust+ via @liamcottle/rustplus.js. The bot already implements a strict vertical layer architecture:
 
-The bot follows a strict vertical layer architecture with clear separation of concerns:
+Discord Layer (UI): commands, channel management, sending messages
 
-Discord Layer → UI & interactions
+Service Layer: business logic, formatting decisions (not Discord embeds)
 
-Service Layer → Business logic
+Rust Layer: Rust+ connection, event listening, raw data collection
 
-Rust Layer → Rust+ API integration
+Core Layer: eventBus, logger, error handler
 
-Core Layer → Infrastructure (logging, events, error handling)
+Storage Layer: in-memory per-guild config
 
-All layers are already connected and working end-to-end (vertical connect is complete).
-The bot can successfully connect to Discord, connect to a Rust server, and return server status.
+The bot already has:
 
-The next phase focuses on user-facing UX and persistent live status features, not backend plumbing.
+A dedicated status channel with a pinned live panel message
 
-High-Level Product Goal
+A hybrid persistent Rust connection owned by RustConnectionManager
 
-The bot should provide a clean, always-available “Rust Status Dashboard” inside Discord, without spamming messages and without cluttering other channels.
+An event bus used for decoupling (eventBus.emit(...))
 
-This dashboard should:
+Now we are implementing the next major feature: a dedicated channel that receives push-based server/world event notifications.
 
-Live inside a dedicated Discord channel
+Goal
 
-Show server status and team info
+Implement a new Discord channel named:
 
-Be persistent (same message updated over time)
+server-events
 
-Be pinned and act as the single source of truth
+This channel is a feed of important Rust world events. It should be:
 
-Be controlled via a small, focused set of slash commands
+Automatically created if missing (on startup)
 
-Dedicated Status Channel Concept
-Channel Behavior
+Stored per guild in config (guildConfig)
 
-The bot will create a new text channel (e.g. #rust-status)
+Used only for event notifications (append-only messages)
 
-This channel is not a general command channel
+The status channel remains calm and only contains the pinned dashboard. The event channel is for notifications.
 
-Users may type anything in it, but:
+Events to Detect and Notify
 
-The Rust bot will only respond to specific commands
+We want to detect these world events and send notifications:
 
-All other commands are ignored or politely rejected
+Chinook Drop
 
-Status-Only Commands
+Notify: “Chinook drop at grid X”
 
-The bot should only listen and respond to the following commands in the status channel:
+Cargo Ship
 
-/panel
+Notify: “Cargo entering from SIDE at grid X”
 
-/panel refresh
+Notify: “Cargo leaving toward SIDE at grid X”
 
-/panel stop
+SIDE is an approximation based on position near map edge (e.g., WEST/EAST/NORTH/SOUTH)
 
-/server
+Patrol Helicopter
 
-/team
+Notify when heli enters/spawns: “Patrol heli IN at grid X”
 
-If these commands are used outside the status channel:
+Notify when heli is destroyed / despawns: “Patrol heli DOWN at grid X”
 
-The bot should respond with a friendly message indicating the correct channel
+“DOWN grid” must use the last known heli position tracked prior to death
 
-This restriction must be enforced in bot logic, not via Discord permission locking.
+Small Oil Rig Called
 
-Live Panel (Persistent Message) Concept
-What the Panel Is
+Notify: “Small Oil Rig called at grid X”
 
-A single Discord message posted by the bot at the top of the status channel
+Large Oil Rig Called
 
-This message contains:
+Notify: “Large Oil Rig called at grid X”
 
-Rust server information
+Important Notes / Constraints
+Rust+ Data Reality
 
-Team online/offline snapshot
+Rust+ does not directly provide perfect semantic events like “cargo entering from west”. Instead we must:
 
-Last updated timestamp
+Listen to low-level Rust+ events such as map markers and entity changes
 
-The message is pinned
+Maintain local state (previous markers/entities)
 
-The bot edits this same message on updates instead of sending new messages
+Infer higher-level events (entering/leaving/down/called)
 
-This message acts as a live dashboard, not a chat log.
+Emit clean high-level domain events into our internal event bus
 
-Panel Lifecycle Rules
-
-There is one panel per guild
-
-When the panel is created:
-
-Bot posts the message
-
-Pins it
-
-Stores guildId, channelId, and messageId
-
-On refresh:
-
-The bot edits the existing message
-
-If the message is deleted:
-
-The bot recreates it automatically
-
-If the channel is deleted:
-
-The bot recreates the channel and the panel
-
-Update Strategy
-
-The panel should be updated using polling (not events yet)
-
-A fixed interval (e.g. 60–120 seconds)
-
-Manual refresh via /panel refresh
-
-Event-driven updates (alarms, team changes) will be added later
-
-The Rust connection strategy is already defined as Hybrid:
-
-Lazy-initialized
-
-Persistent
-
-Auto-reconnecting
-
-Owned by RustConnectionManager
-
-Architectural Constraints (Must Be Followed)
+Architecture Rules (Must Follow)
 
 Discord layer must NEVER call Rust+ APIs directly
 
-Discord commands must ONLY call Service layer methods
+Rust layer must NEVER reference Discord
 
-Rust layer must not know Discord exists
+Low-level Rust+ events must be interpreted in the Rust layer (or a Rust-specific interpreter module)
 
-Connection lifecycle is owned by RustConnectionManager only
+Only high-level, semantic events should be emitted over the eventBus to the rest of the app
 
-Live panel update logic belongs to the Discord layer, not Rust or services
+Discord side should only:
 
-Services return structured data, never Discord embeds
+find the correct channel (server-events)
 
-One feature at a time — no scope creep
+format message text
 
-Non-Goals (Explicitly Out of Scope for Now)
+send a notification
 
-Smart alarms
+Implement minimal scope: only these event types, no other features
 
-Team chat sync
+Event Pipeline Design
+Target Event Flow
+RustClient (raw Rust+ events)
+↓
+Rust World Event Listener (collect marker/entity updates)
+↓
+Server Events Interpreter (stateful inference)
+↓
+eventBus.emit('server:event', payload)
+↓
+Discord Server Events Router
+↓
+#server-events channel message
 
-Device control
+We will implement a semantic payload for each event emitted on the bus, e.g.:
+
+type: 'CHINOOK_DROP'
+
+type: 'CARGO', state: 'ENTERING'|'LEAVING', side: 'WEST'|'EAST'|'NORTH'|'SOUTH', grid: 'H12'
+
+type: 'PATROL_HELI', state: 'IN'|'DOWN', grid: 'K8'
+
+type: 'OIL_RIG', size: 'SMALL'|'LARGE', grid: 'M19'
+
+plus timestamp always
+
+Grid Conversion Requirement
+
+We must convert Rust world coordinates (x/y) to a Rust grid format like:
+
+H14
+
+K8
+
+This should be implemented as a shared utility (core or rust utility module).
+
+Cargo “side” inference uses:
+
+proximity to map edges (x/y near min/max) → determine cardinal entry/exit side.
+
+Anti-Spam / Deduplication Rules (Very Important)
+
+Event channels can get noisy, so implement these protections:
+
+Deduplicate identical events
+
+Same event type + same grid + same state within a short window (e.g., 30–60 seconds) should not resend
+
+Cargo/heli should only emit meaningful transitions:
+
+cargo entering once
+
+cargo leaving once
+
+heli in once
+
+heli down once
+
+The event channel is append-only
+
+Never edit old events
+
+Always send new messages only when a semantic event occurs
+
+Discord Notification Format Requirements
+
+Notifications should be readable and consistent. Use Discord timestamp formatting:
+
+Include 🕘 <t:UNIX:R> for relative time
+
+Simple messages are acceptable (embeds optional later)
+
+Examples:
+
+Chinook
+
+🚁 Chinook Drop — Grid H14 — 🕘 <t:...:R>
+
+Cargo
+
+🚢 Cargo Incoming — From WEST — Grid A10 — 🕘 <t:...:R>
+
+🚢 Cargo Leaving — Toward EAST — Grid B9 — 🕘 <t:...:R>
+
+Heli
+
+🚁 Patrol Heli IN — Grid K12 — 🕘 <t:...:R>
+
+💥 Patrol Heli DOWN — Grid J10 — 🕘 <t:...:R>
+
+Oil Rig
+
+🛢 Large Oil Rig Called — Grid M19 — 🕘 <t:...:R>
+
+Success Criteria
+
+The feature is successful when:
+
+#server-events is created automatically if missing
+
+The bot listens to Rust+ updates continuously
+
+The interpreter detects the requested events reliably
+
+The bot posts notifications to #server-events
+
+Patrol heli “DOWN at grid” uses last known position
+
+No spam: duplicates are controlled
+
+The rest of the bot (status panel) remains stable and unaffected
+
+Out of Scope
+
+Role pings / mentions
+
+Quiet hours
+
+Per-user subscription
+
+Database persistence
 
 Multi-server per guild
 
-Role-based permissions
-
-Database persistence (in-memory or JSON is fine)
-
-Definition of Success for This Phase
-
-This phase is successful when:
-
-A new status channel is created automatically
-
-The bot posts and pins a live panel message
-
-The panel shows server + team information
-
-The panel can be refreshed without creating new messages
-
-Only the intended commands work in that channel
-
-The bot can run 24/7 without manual intervention
-
-Mental Model to Follow
-
-“This bot behaves like a live status screen, not a chat bot.”
-
-Once this context is set, the implementation should proceed in small, incremental steps, validating behavior after each step.
+Buttons / interactive components

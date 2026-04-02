@@ -5,6 +5,7 @@
     "notificationChannel": null,
     "statusChannelId": "1451267438829113344",
     "statusPanelMessageId": "1451295840584077425",
-    "panelEnabled": true
+    "panelEnabled": true,
+    "serverEventsChannelId": "1451307461867999404"
   }
 }
