@@ -3,6 +3,7 @@ const logger = require('../../core/logger');
 const discordClient = require('../client');
 const guildConfigStore = require('../../storage/guildConfig.store');
 const statusChannelGuard = require('../guards/statusChannel.guard');
+const { safeReply, safeFollowUp } = require('../utils/interactionResponse');
 
 /**
  * Discord interactionCreate event
@@ -50,10 +51,18 @@ module.exports = {
         flags: MessageFlags.Ephemeral,
       };
 
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(errorMessage);
-      } else {
-        await interaction.reply(errorMessage);
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await safeFollowUp(interaction, errorMessage, 'interactionCreate.commandError');
+        } else {
+          await safeReply(interaction, errorMessage, 'interactionCreate.commandError');
+        }
+      } catch (responseError) {
+        logger.error('Failed to send command error response', {
+          command: interaction.commandName,
+          error: responseError.message,
+          stack: responseError.stack,
+        });
       }
     }
   },

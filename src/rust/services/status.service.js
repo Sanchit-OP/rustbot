@@ -44,14 +44,30 @@ class StatusService {
       logger.success('Server status retrieved successfully');
       return status;
     } catch (error) {
-      logger.error('Failed to check server status', { error: error.message });
+      const errorText = getErrorMessage(error);
+      logger.error('Failed to check server status', { error: errorText });
+      const hint = this.getConnectionHint(error);
       
       return {
         success: false,
-        error: error.message,
-        message: 'Failed to connect to Rust server. Please check your credentials and try again.',
+        error: errorText,
+        message: hint || 'Failed to connect to Rust server. Please check your credentials and try again.',
       };
     }
+  }
+
+  getConnectionHint(error) {
+    const message = getErrorMessage(error).toLowerCase();
+
+    if (message.includes('parse error: expected http/')) {
+      return 'Connection endpoint appears incorrect. Use the Rust+ app.port from server.cfg (not the game/query port).';
+    }
+
+    if (message.includes('not_found')) {
+      return 'Rust+ credentials were accepted at socket level but request auth failed (not_found). Re-pair this server and update RUST_PLAYER_ID / RUST_PLAYER_TOKEN for the same Steam account.';
+    }
+
+    return null;
   }
 
   /**
@@ -86,3 +102,23 @@ class StatusService {
 
 // Export singleton instance
 module.exports = new StatusService();
+
+function getErrorMessage(error) {
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error?.error && typeof error.error === 'string') {
+    return error.error;
+  }
+
+  if (error?.message && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch (jsonError) {
+    return String(error);
+  }
+}

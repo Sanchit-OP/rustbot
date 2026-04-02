@@ -2,6 +2,9 @@ const logger = require('../../core/logger');
 const rustConnectionManager = require('../client/RustConnectionManager');
 const eventBus = require('../../core/eventBus');
 
+let activeClient = null;
+let activeHandlers = null;
+
 /**
  * Low-level Rust world event listener.
  * Subscribes to Rust+ client events (map markers, entity updates) and forwards raw data.
@@ -13,32 +16,69 @@ function registerWorldListeners(rustPlusClient) {
     return;
   }
 
-  rustPlusClient.on('message', (msg) => {
-    // Raw AppMessage from Rust+
-    logger.debug('Rust message received', { keys: Object.keys(msg.response || msg.broadcast || {}) });
-    eventBus.emitEvent('rust:raw_message', msg);
-  });
+  if (activeClient === rustPlusClient) {
+    logger.debug('Rust world listeners already attached for current client');
+    return;
+  }
 
-  rustPlusClient.on('mapMarkers', (markers) => {
-    logger.debug('Rust map markers update received', { count: markers?.length });
-    eventBus.emitEvent('rust:map_markers', markers);
-  });
+  if (activeClient && activeHandlers) {
+    detachWorldListeners(activeClient, activeHandlers);
+  }
 
-  rustPlusClient.on('entityUpdate', (entity) => {
-    logger.debug('Rust entity update received', { entityId: entity?.entityId });
-    eventBus.emitEvent('rust:entity_update', entity);
-  });
+  const handlers = {
+    onMessage: (msg) => {
+      logger.debug('Rust message received', {
+        keys: Object.keys(msg.response || msg.broadcast || {}),
+      });
+      eventBus.emitEvent('rust:raw_message', msg);
+    },
+    onMapMarkers: (markers) => {
+      logger.debug('Rust map markers update received', { count: markers?.length });
+      eventBus.emitEvent('rust:map_markers', markers);
+    },
+    onEntityUpdate: (entity) => {
+      logger.debug('Rust entity update received', { entityId: entity?.entityId });
+      eventBus.emitEvent('rust:entity_update', entity);
+    },
+    onEntitySpawn: (entity) => {
+      logger.debug('Rust entity spawn received', { entityId: entity?.entityId });
+      eventBus.emitEvent('rust:entity_spawn', entity);
+    },
+    onEntityDeath: (entity) => {
+      logger.debug('Rust entity death received', { entityId: entity?.entityId });
+      eventBus.emitEvent('rust:entity_death', entity);
+    },
+  };
 
-  rustPlusClient.on('entitySpawn', (entity) => {
-    logger.debug('Rust entity spawn received', { entityId: entity?.entityId });
-    eventBus.emitEvent('rust:entity_spawn', entity);
-  });
+  rustPlusClient.on('message', handlers.onMessage);
+  rustPlusClient.on('mapMarkers', handlers.onMapMarkers);
+  rustPlusClient.on('entityUpdate', handlers.onEntityUpdate);
+  rustPlusClient.on('entitySpawn', handlers.onEntitySpawn);
+  rustPlusClient.on('entityDeath', handlers.onEntityDeath);
 
-  rustPlusClient.on('entityDeath', (entity) => {
-    logger.debug('Rust entity death received', { entityId: entity?.entityId });
-    eventBus.emitEvent('rust:entity_death', entity);
-  });
+  activeClient = rustPlusClient;
+  activeHandlers = handlers;
 }
+
+function detachWorldListeners(rustPlusClient, handlers) {
+  if (!rustPlusClient || !handlers) {
+    return;
+  }
+
+  rustPlusClient.off('message', handlers.onMessage);
+  rustPlusClient.off('mapMarkers', handlers.onMapMarkers);
+  rustPlusClient.off('entityUpdate', handlers.onEntityUpdate);
+  rustPlusClient.off('entitySpawn', handlers.onEntitySpawn);
+  rustPlusClient.off('entityDeath', handlers.onEntityDeath);
+}
+
+eventBus.subscribe('rust:disconnected', () => {
+  if (activeClient && activeHandlers) {
+    detachWorldListeners(activeClient, activeHandlers);
+    activeClient = null;
+    activeHandlers = null;
+  }
+});
 
 // Hook into existing Rust client once connection is established
 eventBus.subscribe('rust:connected', () => {

@@ -4,6 +4,11 @@ const panelManager = require('../../panel/PanelManager');
 const guildConfigStore = require('../../../storage/guildConfig.store');
 const logger = require('../../../core/logger');
 const { DEFAULT_PANEL_INTERVAL_SECONDS } = require('../../../config/discord');
+const {
+  safeDeferReply,
+  safeReply,
+  safeEditReply,
+} = require('../../utils/interactionResponse');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -21,10 +26,10 @@ module.exports = {
 
   async execute(interaction) {
     if (!interaction.guild) {
-      await interaction.reply({
+      await safeReply(interaction, {
         content: 'This command can only be used in a server.',
         flags: MessageFlags.Ephemeral,
-      });
+      }, 'panel.command.guildOnly');
       return;
     }
 
@@ -44,15 +49,15 @@ module.exports = {
       await handleStart(interaction);
     } catch (error) {
       logger.error('Failed to update panel', { error: error.message });
-      await interaction.editReply({
+      await safeEditReply(interaction, {
         content: `Failed to update panel: ${error.message}`,
-      });
+      }, 'panel.command.catch');
     }
   },
 };
 
 async function handleStart(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }, 'panel.start.defer');
 
   // Initial update ensures channel + message exist and stores ids
   const panelData = await panelService.getPanelData();
@@ -72,22 +77,22 @@ async function handleStart(interaction) {
 
   const channelMention = getStatusChannelMention(interaction.guild.id);
 
-  await interaction.editReply({
+  await safeEditReply(interaction, {
     content: `Panel updates started. Live panel in ${channelMention} (every ${DEFAULT_PANEL_INTERVAL_SECONDS}s).`,
-  });
+  }, 'panel.start.reply');
 }
 
 async function handleRefresh(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }, 'panel.refresh.defer');
 
   const panelData = await panelService.getPanelData();
   await panelManager.updatePanel(interaction.guild, panelData);
 
   const channelMention = getStatusChannelMention(interaction.guild.id);
 
-  await interaction.editReply({
+  await safeEditReply(interaction, {
     content: `Panel refreshed in ${channelMention}.`,
-  });
+  }, 'panel.refresh.reply');
 }
 
 function getStatusChannelMention(guildId) {
@@ -96,12 +101,12 @@ function getStatusChannelMention(guildId) {
 }
 
 async function handleStop(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await safeDeferReply(interaction, { flags: MessageFlags.Ephemeral }, 'panel.stop.defer');
 
   panelManager.stopAutoUpdate(interaction.guild.id);
   guildConfigStore.setPanelEnabled(interaction.guild.id, false);
 
-  await interaction.editReply({
+  await safeEditReply(interaction, {
     content: 'Panel updates stopped. The panel message remains pinned.',
-  });
+  }, 'panel.stop.reply');
 }

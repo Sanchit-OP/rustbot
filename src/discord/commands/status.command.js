@@ -1,6 +1,11 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const statusService = require('../../rust/services/status.service');
 const logger = require('../../core/logger');
+const {
+  safeDeferReply,
+  safeEditReply,
+  safeReply,
+} = require('../utils/interactionResponse');
 
 /**
  * /status command
@@ -14,7 +19,7 @@ module.exports = {
   async execute(interaction) {
     try {
       // Defer reply since this might take a moment
-      await interaction.deferReply();
+      await safeDeferReply(interaction, undefined, 'status.command.defer');
 
       logger.info(`Status command executed by ${interaction.user.tag}`);
 
@@ -38,7 +43,7 @@ module.exports = {
           .setTimestamp()
           .setFooter({ text: 'Rust+ Bot' });
 
-        await interaction.editReply({ embeds: [embed] });
+        await safeEditReply(interaction, { embeds: [embed] }, 'status.command.success');
       } else {
         // Create embed for failed status
         const embed = new EmbedBuilder()
@@ -51,7 +56,7 @@ module.exports = {
           .setTimestamp()
           .setFooter({ text: 'Rust+ Bot' });
 
-        await interaction.editReply({ embeds: [embed] });
+        await safeEditReply(interaction, { embeds: [embed] }, 'status.command.failure');
       }
     } catch (error) {
       logger.error('Error executing status command', { error: error.message });
@@ -65,10 +70,14 @@ module.exports = {
         )
         .setTimestamp();
 
-      if (interaction.deferred) {
-        await interaction.editReply({ embeds: [errorEmbed] });
+      if (interaction.deferred || interaction.replied) {
+        await safeEditReply(interaction, { embeds: [errorEmbed] }, 'status.command.catch');
       } else {
-        await interaction.reply({ embeds: [errorEmbed], flags: MessageFlags.Ephemeral });
+        await safeReply(
+          interaction,
+          { embeds: [errorEmbed], flags: MessageFlags.Ephemeral },
+          'status.command.catch'
+        );
       }
     }
   },

@@ -78,6 +78,11 @@ async function createStatusChannels(client) {
 async function resumePanels(client) {
   for (const [, guild] of client.guilds.cache) {
     try {
+      if (!guildConfigStore.isPanelEnabled(guild.id)) {
+        logger.info(`Panel auto-update disabled for guild: ${guild.name}; skipping resume`);
+        continue;
+      }
+
       // Ensure status channel exists and message is reachable (will recreate if missing)
       const channel = await panelManager.ensureStatusChannel(guild);
       const message = await panelManager.ensurePanelMessage(guild, channel);
@@ -92,7 +97,6 @@ async function resumePanels(client) {
       );
 
       guildConfigStore.setStatusPanelMessageId(guild.id, message.id);
-      guildConfigStore.setPanelEnabled(guild.id, true);
 
       logger.info(`Resumed/started panel updates for guild: ${guild.name}`);
     } catch (error) {

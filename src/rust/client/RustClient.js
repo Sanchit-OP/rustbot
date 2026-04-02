@@ -15,18 +15,49 @@ class RustClient {
     this.client = null;
     this.isConnected = false;
     this.isConnecting = false;
+    this.connectPromise = null;
+    this.clientEventHandlers = new WeakMap();
   }
 
   /**
    * Connect to the Rust server
    */
   async connect() {
-    if (this.isConnected || this.isConnecting) {
-      logger.warn('Already connected or connecting to Rust server');
+    if (this.isConnected) {
+      logger.debug('Rust client already connected');
       return;
     }
 
+    if (this.connectPromise) {
+      logger.info('Rust connect() called while a connection attempt is already in flight');
+      return this.connectPromise;
+    }
+
+    this.connectPromise = this.connectInternal().finally(() => {
+      this.connectPromise = null;
+    });
+
+    return this.connectPromise;
+  }
+
+  async connectInternal() {
     this.isConnecting = true;
+    this.isConnected = false;
+
+    const previousClient = this.client;
+    if (previousClient) {
+      this.cleanupClient(previousClient, { shouldDisconnect: true, clearCurrent: true });
+    }
+
+    const nextClient = new RustPlus(
+      this.serverIp,
+      this.serverPort,
+      this.playerId,
+      this.playerToken
+    );
+
+    this.client = nextClient;
+    this.setupEventListeners(nextClient);
 
     try {
       logger.info('Connecting to Rust server...', {
@@ -34,84 +65,142 @@ class RustClient {
         port: this.serverPort,
       });
 
-      this.client = new RustPlus(
-        this.serverIp,
-        this.serverPort,
-        this.playerId,
-        this.playerToken
-      );
+      await this.awaitInitialConnection(nextClient);
 
-      // Set up event listeners
-      this.setupEventListeners();
-
-      // Connect to the server and wait for 'connected' event
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Connection timeout'));
-        }, 10000);
-
-        this.client.once('connected', () => {
-          clearTimeout(timeout);
-          this.isConnected = true;
-          this.isConnecting = false;
-          resolve();
-        });
-
-        this.client.once('error', (error) => {
-          clearTimeout(timeout);
-          this.isConnecting = false;
-          this.isConnected = false;
-          reject(error);
-        });
-
-        this.client.connect();
-      });
-
+      this.isConnected = true;
       logger.success('Connected to Rust server');
       eventBus.emitEvent('rust:connected', {
         ip: this.serverIp,
         port: this.serverPort,
       });
     } catch (error) {
-      this.isConnecting = false;
       this.isConnected = false;
-      logger.error('Failed to connect to Rust server', { error: error.message });
+      const hint = getConnectionHint(error);
+      const message = getErrorMessage(error);
+      logger.error('Failed to connect to Rust server', {
+        error: message,
+        hint: hint || undefined,
+      });
       eventBus.emitEvent('rust:connection_failed', {
         ip: this.serverIp,
         port: this.serverPort,
-        error: error.message,
+        error: message,
+        hint: hint || undefined,
       });
+
+      if (this.client === nextClient) {
+        this.cleanupClient(nextClient, { shouldDisconnect: true, clearCurrent: true });
+      }
+
       throw error;
+    } finally {
+      this.isConnecting = false;
     }
+  }
+
+  awaitInitialConnection(clientInstance) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        finalize(new Error('Connection timeout'));
+      }, 10000);
+
+      const onConnected = () => {
+        finalize(null);
+      };
+
+      const onError = (error) => {
+        finalize(error);
+      };
+
+      const finalize = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeout);
+        clientInstance.off('connected', onConnected);
+        clientInstance.off('error', onError);
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      };
+
+      clientInstance.once('connected', onConnected);
+      clientInstance.once('error', onError);
+      clientInstance.connect();
+    });
   }
 
   /**
    * Set up event listeners for the Rust client
    */
-  setupEventListeners() {
-    if (!this.client) return;
+  setupEventListeners(clientInstance) {
+    if (!clientInstance) return;
 
-    this.client.on('connected', () => {
+    const onConnected = () => {
+      if (clientInstance !== this.client) return;
       logger.info('Rust client connected event received');
-    });
+    };
 
-    this.client.on('disconnected', () => {
+    const onDisconnected = () => {
+      if (clientInstance !== this.client) return;
       this.isConnected = false;
       logger.warn('Disconnected from Rust server');
       eventBus.emitEvent('rust:disconnected', {
         ip: this.serverIp,
         port: this.serverPort,
       });
-    });
+    };
 
-    this.client.on('error', (error) => {
-      logger.error('Rust client error', { error: error.message });
+    const onError = (error) => {
+      if (clientInstance !== this.client) return;
+      const message = getErrorMessage(error);
+      logger.error('Rust client error', { error: message });
       eventBus.emitEvent('rust:error', {
         ip: this.serverIp,
         port: this.serverPort,
-        error: error.message,
+        error: message,
       });
+    };
+
+    this.clientEventHandlers.set(clientInstance, {
+      onConnected,
+      onDisconnected,
+      onError,
     });
+
+    clientInstance.on('connected', onConnected);
+    clientInstance.on('disconnected', onDisconnected);
+    clientInstance.on('error', onError);
+  }
+
+  cleanupClient(clientInstance, { shouldDisconnect = true, clearCurrent = false } = {}) {
+    if (!clientInstance) return;
+
+    const handlers = this.clientEventHandlers.get(clientInstance);
+    if (handlers) {
+      clientInstance.off('connected', handlers.onConnected);
+      clientInstance.off('disconnected', handlers.onDisconnected);
+      clientInstance.off('error', handlers.onError);
+      this.clientEventHandlers.delete(clientInstance);
+    }
+
+    if (shouldDisconnect) {
+      try {
+        clientInstance.disconnect();
+      } catch (error) {
+        logger.warn('Failed to disconnect stale Rust client instance cleanly', {
+          error: getErrorMessage(error),
+        });
+      }
+    }
+
+    if (clearCurrent && this.client === clientInstance) {
+      this.client = null;
+    }
   }
 
   /**
@@ -128,7 +217,7 @@ class RustClient {
       }, 10000);
       return response.info;
     } catch (error) {
-      logger.error('Failed to get server info', { error: error.message });
+      logger.error('Failed to get server info', { error: getErrorMessage(error) });
       throw error;
     }
   }
@@ -147,7 +236,7 @@ class RustClient {
       }, 10000);
       return response.time;
     } catch (error) {
-      logger.error('Failed to get server time', { error: error.message });
+      logger.error('Failed to get server time', { error: getErrorMessage(error) });
       throw error;
     }
   }
@@ -170,8 +259,38 @@ class RustClient {
       return response.teamInfo;
     } catch (error) {
       // Some servers may not have team info; return null instead of crashing.
-      logger.warn('Failed to get team info; returning null', { error: error.message });
+      logger.warn('Failed to get team info; returning null', { error: getErrorMessage(error) });
       return null;
+    }
+  }
+
+  /**
+   * Send a message to Rust team chat.
+   */
+  async sendTeamMessage(message) {
+    if (!this.isConnected || !this.client) {
+      throw new Error('Not connected to Rust server');
+    }
+
+    const text = String(message || '').trim();
+    if (!text) {
+      return;
+    }
+
+    try {
+      await this.client.sendRequestAsync(
+        {
+          sendTeamMessage: {
+            message: text.slice(0, 200),
+          },
+        },
+        10000
+      );
+    } catch (error) {
+      logger.error('Failed to send Rust team chat message', {
+        error: getErrorMessage(error),
+      });
+      throw error;
     }
   }
 
@@ -180,8 +299,14 @@ class RustClient {
    */
   disconnect() {
     if (this.client) {
-      this.client.disconnect();
+      const activeClient = this.client;
+      this.cleanupClient(activeClient, {
+        shouldDisconnect: true,
+        clearCurrent: true,
+      });
       this.isConnected = false;
+      this.isConnecting = false;
+      this.connectPromise = null;
       logger.info('Disconnected from Rust server');
     }
   }
@@ -200,3 +325,33 @@ class RustClient {
 }
 
 module.exports = RustClient;
+
+function getConnectionHint(error) {
+  const message = getErrorMessage(error).toLowerCase();
+
+  if (message.includes('parse error: expected http/')) {
+    return 'Likely wrong port/protocol. Configure RUST_SERVER_PORT to Rust+ app.port, not the game/query port.';
+  }
+
+  return null;
+}
+
+function getErrorMessage(error) {
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  if (error?.error && typeof error.error === 'string') {
+    return error.error;
+  }
+
+  if (error?.message && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch (jsonError) {
+    return String(error);
+  }
+}

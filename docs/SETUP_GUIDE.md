@@ -149,3 +149,16 @@ After obtaining your credentials:
 - Make sure you're on the correct Rust server
 - Verify your Steam ID is correct
 - Try re-pairing with a new code
+
+---
+
+## Pairing Helper Script (Repo)
+
+This repo now includes helper commands:
+
+```bash
+npm run pair:register
+npm run pair:listen
+```
+
+`pair:listen` prints a copy-ready `.env` block when a Rust+ server pairing notification is received.

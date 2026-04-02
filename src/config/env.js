@@ -4,6 +4,14 @@ const path = require('path');
 // Load environment variables from .env file
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+function parseCsv(input) {
+  if (!input) return [];
+  return input
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
 /**
  * Central environment configuration
  * All environment variables are accessed through this module
@@ -26,6 +34,8 @@ const env = {
     serverPort: parseInt(process.env.RUST_SERVER_PORT, 10),
     playerId: process.env.RUST_PLAYER_ID,
     playerToken: parseInt(process.env.RUST_PLAYER_TOKEN, 10),
+    chatCommandPrefix: process.env.RUST_CHAT_COMMAND_PREFIX || '!rb',
+    chatAllowedSteamIds: parseCsv(process.env.RUST_CHAT_ALLOWED_STEAM_IDS),
   },
 
   // Validation

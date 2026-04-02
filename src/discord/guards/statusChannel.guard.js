@@ -1,4 +1,5 @@
 const { MessageFlags } = require('discord.js');
+const { safeFollowUp, safeReply } = require('../utils/interactionResponse');
 
 const STATUS_ONLY_COMMANDS = new Set(['panel']);
 
@@ -24,9 +25,9 @@ async function statusChannelGuard(interaction, guildConfig) {
   const payload = { content: message, flags: MessageFlags.Ephemeral };
 
   if (interaction.replied || interaction.deferred) {
-    await interaction.followUp(payload);
+    await safeFollowUp(interaction, payload, 'statusChannel.guard');
   } else {
-    await interaction.reply(payload);
+    await safeReply(interaction, payload, 'statusChannel.guard');
   }
 
   return false;
