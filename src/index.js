@@ -18,6 +18,7 @@ require('./rust/events/teamEventAnnouncer.event');
 require('./rust/interpreters/serverEvents.interpreter');
 require('./rust/interpreters/teamChat.interpreter');
 require('./rust/events/teamChatCommand.event');
+require('./rust/events/teamTracker.event');
 require('./discord/events/serverEvents.handler');
 
 /**

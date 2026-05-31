@@ -1,10 +1,18 @@
 const rustConnectionManager = require('../client/RustConnectionManager');
 const statusService = require('./status.service');
 const crateTimerService = require('./crateTimer.service');
-const eventHealthService = require('./eventHealth.service');
 const reminderService = require('./reminder.service');
+const { posToGrid } = require('../../core/utils/grid');
+const serverEventsInterpreter = require('../interpreters/serverEvents.interpreter');
 
 const COMMAND_PREFIX = '!';
+
+const MARKER_TYPES = {
+  CH47: 4,
+  CARGO_SHIP: 5,
+  CRATE: 6,
+  PATROL_HELI: 8,
+};
 
 class TeamChatCommandService {
   async handle(commandEvent) {
@@ -21,10 +29,16 @@ class TeamChatCommandService {
         return this.handleCrate();
       case 'c_time':
         return this.handleCrateTime();
-      case 'events':
-        return this.handleEvents();
       case 'remind':
         return this.handleRemind(commandEvent);
+      case 'heli':
+        return this.handleHeliLocation();
+      case 'cargo':
+        return this.handleCargoLocation();
+      case 'chinook':
+        return this.handleChinookLocation();
+      case 'map':
+        return this.handleMap(commandEvent);
       default:
         return `Unknown command "${command}". Try ${COMMAND_PREFIX}help`;
     }
@@ -121,26 +135,113 @@ class TeamChatCommandService {
     };
   }
 
+  async handleHeliLocation() {
+    const markers = await this._getMarkers();
+    const heli = markers.find(m => m.type === MARKER_TYPES.PATROL_HELI);
+    if (!heli) return 'Patrol heli not on map';
+    const grid = this._toGrid(heli.x, heli.y);
+    return `Patrol heli at ${grid}`;
+  }
+
+  async handleCargoLocation() {
+    const markers = await this._getMarkers();
+    const cargo = markers.find(m => m.type === MARKER_TYPES.CARGO_SHIP);
+    if (!cargo) return 'Cargo ship not on map';
+    const grid = this._toGrid(cargo.x, cargo.y);
+    const heading = rotationToCompass(cargo.rotation);
+    return `Cargo ship at ${grid}, heading ${heading}`;
+  }
+
+  async handleChinookLocation() {
+    const markers = await this._getMarkers();
+    const ch47 = markers.find(m => m.type === MARKER_TYPES.CH47);
+    if (!ch47) return 'Chinook not on map';
+    const grid = this._toGrid(ch47.x, ch47.y);
+    return `Chinook at ${grid}`;
+  }
+
+  async handleMap(commandEvent) {
+    const markers = await this._getMarkers();
+    if (!markers.length) return 'No markers on map';
+
+    const NAMES = {
+      1: 'Player',
+      2: 'Explosion',
+      3: 'VendingMachine',
+      4: 'Chinook',
+      5: 'CargoShip',
+      6: 'LockedCrate',
+      7: 'RadiusZone',
+      8: 'PatrolHeli',
+    };
+
+    // Group by type
+    const groups = new Map();
+    for (const m of markers) {
+      if (!groups.has(m.type)) groups.set(m.type, []);
+      groups.get(m.type).push(m);
+    }
+
+    const mapSize = serverEventsInterpreter.getMapSize();
+    const lines = [`Map: ${markers.length} markers | size: ${mapSize}`];
+
+    // Sort types so interesting ones come first
+    const priority = [8, 5, 4, 6, 2, 7, 1, 3];
+    const sortedTypes = [...groups.keys()].sort((a, b) => {
+      const ai = priority.indexOf(a), bi = priority.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    });
+
+    for (const type of sortedTypes) {
+      const list = groups.get(type);
+      const name = NAMES[type] || `Type${type}`;
+
+      // For high-count types just show count + first name if available
+      if (list.length > 3) {
+        const sample = list[0].name ? ` (e.g. "${list[0].name}")` : '';
+        lines.push(`${name} x${list.length}${sample}`);
+      } else {
+        for (const m of list) {
+          const grid = this._toGrid(m.x, m.y);
+          const label = m.name ? ` "${m.name}"` : '';
+          lines.push(`${name}${label} @ ${grid}`);
+        }
+      }
+    }
+
+    return lines;
+  }
+
+  async _getMarkers() {
+    await rustConnectionManager.ensureConnected();
+    const client = rustConnectionManager.getClient();
+    return (await client.getMapMarkers()) || [];
+  }
+
+  _toGrid(x, y) {
+    return posToGrid(x, y, serverEventsInterpreter.getMapSize());
+  }
+
   buildHelp() {
+    const p = COMMAND_PREFIX;
     return [
-      'Commands:',
-      '',
-      `${COMMAND_PREFIX}players - show player count`,
-      '',
-      `${COMMAND_PREFIX}time - show server time`,
-      '',
-      `${COMMAND_PREFIX}crate - start 15:00 crate timer`,
-      '',
-      `${COMMAND_PREFIX}c_time - show remaining crate time`,
-      '',
-      `${COMMAND_PREFIX}events - check event pipeline health`,
-      '',
-      `${COMMAND_PREFIX}remind 05:00 meds - reminder timer`,
-    ].join('\n');
+      `--- Commands ---`,
+      `${p}players  ${p}time`,
+      `${p}heli  ${p}cargo  ${p}chinook`,
+      `${p}map  ${p}crate  ${p}c_time`,
+      `${p}remind 05:00 <msg>`,
+    ];
   }
 }
 
 module.exports = new TeamChatCommandService();
+
+function rotationToCompass(rotation) {
+  if (!Number.isFinite(rotation)) return '?';
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const index = Math.round(((rotation % 360) + 360) % 360 / 45) % 8;
+  return dirs[index];
+}
 
 function parseDurationSeconds(input) {
   if (!input) {

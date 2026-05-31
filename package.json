@@ -7,6 +7,8 @@
     "postinstall": "node scripts/patch-rustplus-proto.js",
     "pair:register": "node node_modules/@liamcottle/rustplus.js/cli/index.js --config-file=rustplus.config.json fcm-register",
     "pair:listen": "node scripts/pairing-listener.js",
+    "server:show": "powershell -ExecutionPolicy Bypass -File scripts/show-config.ps1",
+    "server:set": "powershell -ExecutionPolicy Bypass -File scripts/set-server.ps1",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

@@ -29,11 +29,22 @@ This script wraps `fcm-listen` and prints a ready-to-paste `.env` block when a s
 
 ## 4. Update `.env`
 
-Copy the printed values:
+Run the config script and paste in the printed values when prompted:
 
-- `RUST_SERVER_IP`
-- `RUST_SERVER_PORT`
-- `RUST_PLAYER_ID`
-- `RUST_PLAYER_TOKEN`
+```powershell
+.\scripts\set-server.ps1
+```
 
-Then restart the bot.
+Or pass them directly without prompts:
+
+```powershell
+.\scripts\set-server.ps1 -Ip 1.2.3.4 -Port 28082 -PlayerId 765611... -PlayerToken 123456789
+```
+
+The bot will auto-fetch map size from the new server on startup — no need to set it manually.
+
+Then restart the bot:
+
+```powershell
+npm start
+```

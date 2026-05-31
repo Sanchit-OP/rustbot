@@ -15,11 +15,14 @@ function posToGrid(x, y, mapSize = DEFAULT_MAP_SIZE) {
   }
 
   const size = mapSize || DEFAULT_MAP_SIZE;
-  const gridDimension = getGridDimension(size);
-  const cell = size / gridDimension;
+  // Rust divides the map into Math.ceil(size/150) equal columns and rows.
+  // e.g. 4250 map → ceil(28.33) = 29 cells, each 146.55 units wide.
+  // Using Math.round or a fixed 150 causes off-by-one on non-round map sizes.
+  const gridCount = Math.ceil(size / DEFAULT_GRID_CELL_SIZE);
+  const cellSize = size / gridCount;
 
-  const colIndex = clamp(Math.floor(x / cell), 0, gridDimension - 1);
-  const rowIndex = clamp(Math.floor((size - y) / cell) + 1, 1, gridDimension);
+  const colIndex = clamp(Math.floor(x / cellSize), 0, gridCount - 1);
+  const rowIndex = clamp(Math.floor((size - y) / cellSize) + 1, 1, gridCount);
 
   const colLabel = toColumnLabel(colIndex);
   return `${colLabel}${rowIndex}`;

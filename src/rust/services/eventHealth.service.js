@@ -70,7 +70,7 @@ class EventHealthService {
       `Events | Rust:${rustUp}`,
       `raw:${this.state.rawMessages} (${formatAge(this.state.lastRawAt)})`,
       `poll:${this.state.pollSuccess}/${this.state.pollErrors} (${formatAge(this.state.lastPollSuccessAt)})`,
-      `markers:${this.state.mapMarkerBatches} (${formatAge(this.state.lastMapMarkersAt)})`,
+      `marker_polls:${this.state.mapMarkerBatches} (${formatAge(this.state.lastMapMarkersAt)})`,
       `semantic:${this.state.semanticEvents} (${formatAge(this.state.lastSemanticAt)})`,
       `discord:${this.state.discordSends} (${formatAge(this.state.lastDiscordSendAt)})`,
     ].join(' | ');

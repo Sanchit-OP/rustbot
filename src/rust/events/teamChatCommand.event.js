@@ -31,7 +31,11 @@ eventBus.subscribe('rust:team_chat_command', async (commandEvent) => {
 
     await rustConnectionManager.ensureConnected();
     const client = rustConnectionManager.getClient();
-    await client.sendTeamMessage(response);
+
+    const messages = Array.isArray(response) ? response : [response];
+    for (const msg of messages) {
+      await client.sendTeamMessage(msg);
+    }
   } catch (error) {
     logger.error('Failed to process Rust team chat command', {
       error: error?.error || error?.message || String(error),

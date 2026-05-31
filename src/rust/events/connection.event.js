@@ -7,12 +7,24 @@ const rustConnectionManager = require('../client/RustConnectionManager');
  * These handlers respond to Rust connection events
  */
 
-// Handle successful connection
-eventBus.subscribe('rust:connected', (data) => {
+// Handle successful connection — fetch server info to get live mapSize
+eventBus.subscribe('rust:connected', async (data) => {
   logger.success('Rust connection established', {
     ip: data.ip,
     port: data.port,
   });
+
+  try {
+    const client = rustConnectionManager.getClient();
+    const info = await client.getInfo();
+    const mapSize = info?.mapSize || info?.size;
+    if (mapSize && Number.isFinite(mapSize) && mapSize > 0) {
+      eventBus.emitEvent('rust:server_info', { mapSize });
+      logger.info(`Map size fetched from server: ${mapSize}`);
+    }
+  } catch (error) {
+    logger.warn('Could not fetch server info for map size', { error: error?.message || String(error) });
+  }
 });
 
 // Handle connection failure

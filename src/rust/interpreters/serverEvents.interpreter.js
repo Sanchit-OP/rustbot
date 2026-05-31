@@ -6,43 +6,43 @@ const { posToGrid, inferSide, DEFAULT_MAP_SIZE } = require('../../core/utils/gri
 const MARKER_TYPES = {
   CH47: 4,
   CARGO_SHIP: 5,
-  PATROL_HELI: 8,
+  CRATE: 6,       // locked crate dropped by chinook
   GENERIC_RADIUS: 7,
+  PATROL_HELI: 8,
 };
 
 const DEDUPE_WINDOW_MS = 45000;
 
 class ServerEventsInterpreter {
   constructor() {
-    this.mapSize = DEFAULT_MAP_SIZE;
+    // Priority: env override → server-provided (via rust:server_info) → default
+    this.mapSize = env.rust.mapSize || DEFAULT_MAP_SIZE;
+    this.mapSizeSource = env.rust.mapSize ? 'env' : 'default';
+
     this.markers = new Map(); // id -> marker
     this.activeCargo = null; // { id, x, y }
     this.activeHeli = null; // { id, x, y }
     this.activeOilRigs = new Map(); // id -> { id, x, y, size }
+    this.seenCrateIds = new Set(); // crate marker IDs already announced
     this.recentEvents = new Map(); // key -> timestamp
 
     this.subscribe();
+    logger.info(`ServerEventsInterpreter using map size: ${this.mapSize} (${this.mapSizeSource})`);
   }
 
   subscribe() {
     eventBus.subscribe('rust:map_markers', markers => this.handleMapMarkers(markers));
-    eventBus.subscribe('rust:entity_update', entity => this.handleEntityUpdate(entity));
-    eventBus.subscribe('rust:entity_spawn', entity => this.handleEntitySpawn(entity));
-    eventBus.subscribe('rust:entity_death', entity => this.handleEntityDeath(entity));
-    eventBus.subscribe('rust:raw_message', msg => this.handleRawMessage(msg));
+    eventBus.subscribe('rust:server_info', info => this.handleServerInfo(info));
   }
 
-  handleRawMessage(msg) {
-    try {
-      const info = msg?.response?.info;
-      const map = msg?.response?.map;
-      if (info?.mapSize) {
-        this.mapSize = info.mapSize;
-      } else if (map?.width && map?.height) {
-        this.mapSize = Math.round((map.width + map.height) / 2);
-      }
-    } catch (error) {
-      logger.debug('Failed to update mapSize from raw message', { error: error.message });
+  handleServerInfo(info) {
+    // Don't override a manually set env value
+    if (this.mapSizeSource === 'env') return;
+    const size = info?.mapSize;
+    if (size && Number.isFinite(size) && size > 0 && size !== this.mapSize) {
+      this.mapSize = size;
+      this.mapSizeSource = 'server';
+      logger.info(`Map size updated from server: ${this.mapSize}`);
     }
   }
 
@@ -55,14 +55,14 @@ class ServerEventsInterpreter {
       this.markers.set(marker.id, marker);
 
       switch (marker.type) {
-        case MARKER_TYPES.CH47:
-          // Intentionally disabled: Chinook alerts are too noisy for this server.
-          break;
         case MARKER_TYPES.CARGO_SHIP:
           this.handleCargo(marker);
           break;
         case MARKER_TYPES.PATROL_HELI:
           this.handleHeli(marker);
+          break;
+        case MARKER_TYPES.CRATE:
+          this.handleCrate(marker);
           break;
         case MARKER_TYPES.GENERIC_RADIUS:
           this.handleOilRig(marker);
@@ -90,27 +90,17 @@ class ServerEventsInterpreter {
       }
     }
 
+    // Prune gone crate IDs so re-drops of a new crate are announced
+    for (const id of this.seenCrateIds) {
+      if (!seenIds.has(id)) {
+        this.seenCrateIds.delete(id);
+      }
+    }
+
     // Prune stale dedupe entries older than 5 minutes
     const now = Date.now();
     for (const [key, ts] of this.recentEvents) {
       if (now - ts > 300000) this.recentEvents.delete(key);
-    }
-  }
-
-  handleEntityUpdate(entity) {
-    this.updateHeliPosition(entity);
-    this.updateCargoPosition(entity);
-  }
-
-  handleEntitySpawn(entity) {
-    this.updateHeliPosition(entity);
-    this.updateCargoPosition(entity);
-  }
-
-  handleEntityDeath(entity) {
-    if (this.activeHeli && entity?.entityId === this.activeHeli.id) {
-      this.emitHeliDown(this.activeHeli);
-      this.activeHeli = null;
     }
   }
 
@@ -161,7 +151,9 @@ class ServerEventsInterpreter {
     this.activeOilRigs.set(marker.id, { id: marker.id, x: marker.x, y: marker.y, size });
   }
 
-  emitChinook(marker) {
+  handleCrate(marker) {
+    if (this.seenCrateIds.has(marker.id)) return;
+    this.seenCrateIds.add(marker.id);
     const grid = this.toGrid(marker);
     this.emitEvent({ type: 'CHINOOK_DROP', grid });
   }
@@ -188,18 +180,8 @@ class ServerEventsInterpreter {
     });
   }
 
-  updateHeliPosition(entity) {
-    if (!this.activeHeli || !entity) return;
-    if (entity.entityId === this.activeHeli.id && Number.isFinite(entity.x) && Number.isFinite(entity.y)) {
-      this.activeHeli = { ...this.activeHeli, x: entity.x, y: entity.y };
-    }
-  }
-
-  updateCargoPosition(entity) {
-    if (!this.activeCargo || !entity) return;
-    if (entity.entityId === this.activeCargo.id && Number.isFinite(entity.x) && Number.isFinite(entity.y)) {
-      this.activeCargo = { ...this.activeCargo, x: entity.x, y: entity.y };
-    }
+  getMapSize() {
+    return this.mapSize;
   }
 
   toGrid(pos) {

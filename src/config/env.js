@@ -37,6 +37,7 @@ const env = {
     chatCommandPrefix: process.env.RUST_CHAT_COMMAND_PREFIX || '!',
     chatAllowedSteamIds: parseCsv(process.env.RUST_CHAT_ALLOWED_STEAM_IDS),
     mapMarkersPollSeconds: parseInt(process.env.RUST_MAP_MARKERS_POLL_SECONDS || '12', 10),
+    mapSize: process.env.RUST_MAP_SIZE ? parseInt(process.env.RUST_MAP_SIZE, 10) : null,
   },
 
   // Validation
