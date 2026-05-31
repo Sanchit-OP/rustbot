@@ -37,4 +37,4 @@ RUST_MAP_MARKERS_POLL_SECONDS=12
 - `!crate` starts a 15:00 timer and auto-alerts at 10:00, 05:00, 01:00, and 00:10 remaining.
 - `!events` returns event-pipeline health (Rust connection, marker polls, semantic event counts, Discord sends).
 - `!remind` supports `mm:ss`, `Xm`, `Xs`, or raw seconds (5s to 2h range).
-- World events are auto-announced in Rust team chat (no command needed): heli, cargo, chinook, oil events.
+- World events are auto-announced in Rust team chat (no command needed): heli, cargo, oil events.

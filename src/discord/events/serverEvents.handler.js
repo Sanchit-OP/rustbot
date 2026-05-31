@@ -6,7 +6,6 @@ const discordClient = require('../client');
 const discordConfig = require('../../config/discord');
 
 const ICON = {
-  CHINOOK: '\u{1F681}',
   CARGO: '\u{1F6A2}',
   HELI_IN: '\u{1F681}',
   HELI_DOWN: '\u{1F4A5}',
@@ -21,32 +20,32 @@ const ICON = {
 eventBus.subscribe('server:event', async (event) => {
   try {
     const client = discordClient.getClient();
-    const guildId = event.guildId || event.guild?.id || null;
-
-    if (!guildId) {
-      logger.warn('Server event missing guildId; cannot route', { event });
-      return;
-    }
-
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) {
-      logger.warn('Guild not found for server event', { guildId, event });
-      return;
-    }
-
-    const channel = await ensureServerEventsChannel(guild);
-    if (!channel) return;
-
     const content = formatServerEvent(event);
     if (!content) return;
 
-    await channel.send({ content });
-    eventBus.emitEvent('discord:server_event_sent', {
-      guildId: guild.id,
-      channelId: channel.id,
-      type: event.type,
-      timestamp: new Date().toISOString(),
-    });
+    const guildId = event.guildId || event.guild?.id || null;
+
+    const guildsToNotify = guildId
+      ? [client.guilds.cache.get(guildId)].filter(Boolean)
+      : [...client.guilds.cache.values()];
+
+    if (guildsToNotify.length === 0) {
+      logger.warn('No guilds found to route server event', { guildId, event });
+      return;
+    }
+
+    for (const guild of guildsToNotify) {
+      const channel = await ensureServerEventsChannel(guild);
+      if (!channel) continue;
+
+      await channel.send({ content });
+      eventBus.emitEvent('discord:server_event_sent', {
+        guildId: guild.id,
+        channelId: channel.id,
+        type: event.type,
+        timestamp: new Date().toISOString(),
+      });
+    }
   } catch (error) {
     logger.error('Failed to handle server event', { error: error.message, event });
   }
@@ -95,9 +94,7 @@ function formatServerEvent(event) {
 
   switch (event.type) {
     case 'CHINOOK_DROP':
-      return botMessage.prefix(
-        `${ICON.CHINOOK} Chinook Drop - Grid ${event.grid || 'Unknown'} - ${ICON.CLOCK} ${ts}`
-      );
+      return null;
     case 'CARGO':
       if (event.state === 'ENTERING') {
         return botMessage.prefix(

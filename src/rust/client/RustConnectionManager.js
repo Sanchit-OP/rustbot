@@ -160,6 +160,7 @@ class RustConnectionManager {
   }
 
   async runReconnectLoop() {
+    this.reconnectAttempts = 0;
     while (this.autoReconnect) {
       const status = this.getStatus();
       if (status.isConnected) {

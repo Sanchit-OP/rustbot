@@ -51,7 +51,7 @@ class TeamEventAnnouncer {
 
     switch (event.type) {
       case 'CHINOOK_DROP':
-        return `Chinook spotted at grid ${grid}`;
+        return null;
       case 'CARGO':
         if (event.state === 'ENTERING') {
           return `Cargo incoming from ${event.side || 'UNKNOWN'} at grid ${grid}`;

@@ -18,6 +18,7 @@ class ServerEventsInterpreter {
     this.markers = new Map(); // id -> marker
     this.activeCargo = null; // { id, x, y }
     this.activeHeli = null; // { id, x, y }
+    this.activeOilRigs = new Map(); // id -> { id, x, y, size }
     this.recentEvents = new Map(); // key -> timestamp
 
     this.subscribe();
@@ -55,7 +56,7 @@ class ServerEventsInterpreter {
 
       switch (marker.type) {
         case MARKER_TYPES.CH47:
-          this.emitChinook(marker);
+          // Intentionally disabled: Chinook alerts are too noisy for this server.
           break;
         case MARKER_TYPES.CARGO_SHIP:
           this.handleCargo(marker);
@@ -80,6 +81,19 @@ class ServerEventsInterpreter {
     if (this.activeHeli && !seenIds.has(this.activeHeli.id)) {
       this.emitHeliDown(this.activeHeli);
       this.activeHeli = null;
+    }
+
+    // Detect disappeared oil rigs
+    for (const [id] of this.activeOilRigs) {
+      if (!seenIds.has(id)) {
+        this.activeOilRigs.delete(id);
+      }
+    }
+
+    // Prune stale dedupe entries older than 5 minutes
+    const now = Date.now();
+    for (const [key, ts] of this.recentEvents) {
+      if (now - ts > 300000) this.recentEvents.delete(key);
     }
   }
 
@@ -138,12 +152,13 @@ class ServerEventsInterpreter {
     }
     if (!size) return;
 
-    const grid = this.toGrid(marker);
-    this.emitEvent({
-      type: 'OIL_RIG',
-      size,
-      grid,
-    });
+    // Only emit once when the oil rig first appears, not every poll cycle
+    if (!this.activeOilRigs.has(marker.id)) {
+      const grid = this.toGrid(marker);
+      this.emitEvent({ type: 'OIL_RIG', size, grid });
+    }
+
+    this.activeOilRigs.set(marker.id, { id: marker.id, x: marker.x, y: marker.y, size });
   }
 
   emitChinook(marker) {
