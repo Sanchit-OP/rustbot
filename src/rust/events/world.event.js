@@ -27,10 +27,22 @@ function registerWorldListeners(rustPlusClient) {
 
   const handlers = {
     onMessage: (msg) => {
-      logger.debug('Rust message received', {
-        keys: Object.keys(msg.response || msg.broadcast || {}),
-      });
-      eventBus.emitEvent('rust:raw_message', msg);
+      try {
+        logger.debug('Rust message received', {
+          keys: Object.keys(msg.response || msg.broadcast || {}),
+        });
+        eventBus.emitEvent('rust:raw_message', msg);
+      } catch (error) {
+        // Swallow proto decode errors — a missing field in one message
+        // should not crash the bot or interrupt the event stream.
+        if (error.name === 'ProtocolError' || (error.message && error.message.includes('missing required'))) {
+          logger.warn('Skipping malformed Rust+ message (missing required proto field)', {
+            message: error.message,
+          });
+          return;
+        }
+        throw error;
+      }
     },
     onMapMarkers: (markers) => {
       logger.debug('Rust map markers update received', { count: markers?.length });
