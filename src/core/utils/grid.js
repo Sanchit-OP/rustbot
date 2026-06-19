@@ -22,7 +22,7 @@ function posToGrid(x, y, mapSize = DEFAULT_MAP_SIZE) {
   const cellSize = size / gridCount;
 
   const colIndex = clamp(Math.floor(x / cellSize), 0, gridCount - 1);
-  const rowIndex = clamp(Math.floor((size - y) / cellSize) + 1, 1, gridCount);
+  const rowIndex = clamp(Math.floor((size - y) / cellSize), 0, gridCount - 1);
 
   const colLabel = toColumnLabel(colIndex);
   return `${colLabel}${rowIndex}`;
